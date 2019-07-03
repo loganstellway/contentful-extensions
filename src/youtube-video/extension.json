@@ -1,0 +1,16 @@
+{
+  "name": "YouTube Videos",
+  "id": "loganstellway-ui-youtube",
+  "fieldTypes": ["Object"],
+  "srcdoc": "./index.html",
+  "parameters": {
+    "instance": [
+      {
+        "id": "oembedEndpoint",
+        "name": "YouTube OEmbed endpoint",
+        "type": "Symbol",
+        "default": "https://noembed.com/embed"
+      }
+    ]
+  }
+}

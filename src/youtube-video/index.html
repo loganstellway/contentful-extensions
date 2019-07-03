@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Contentful UI-Extension YouTube Videos</title>
+    <link rel="stylesheet" href="https://contentful.github.io/ui-extensions-sdk/cf-extension.css" />
+    <script src="https://unpkg.com/contentful-ui-extensions-sdk@3"></script>
+  </head>
+  <body id="youtube-videos-widget">
+    <div id="content"></div>
+
+    <script crossorigin src="https://unpkg.com/react@16/umd/react.production.min.js"></script>
+    <script
+      crossorigin
+      src="https://unpkg.com/react-dom@16/umd/react-dom.production.min.js"
+    ></script>
+    <script crossorigin src="https://cdn.jsdelivr.net/npm/axios@0.19.0/dist/axios.min.js"></script>
+    <script>
+      window.contentfulExtension.init(extension => {
+        // Form Component
+        class YoutubeForm extends React.Component {
+          constructor(props) {
+            super(props);
+
+            this.state = {
+              data: extension.field.getValue() || {}
+            };
+          }
+
+          render() {
+            // Start auto resizer
+            extension.window.startAutoResizer();
+
+            const inputRef = React.createRef();
+            const self = this;
+            const data = this.state.data || {};
+
+            return React.createElement(
+              React.Fragment,
+              null,
+              React.createElement(
+                'form',
+                {
+                  style: { paddingBottom: '15px' },
+                  onSubmit: function(event) {
+                    event.preventDefault();
+
+                    axios
+                      .get(
+                        extension.parameters.instance.oembedEndpoint +
+                          '?url=' +
+                          inputRef.current.value
+                      )
+                      .then(function(resp, status) {
+                        extension.field.setValue(null);
+
+                        if (resp.status == 200 && resp.data && resp.data.url) {
+                          console.log('Updating with data:');
+                          console.log(resp);
+                          extension.field.setValue(resp.data);
+                          self.setState({ data: resp.data });
+                        }
+                      });
+                  }
+                },
+                React.createElement('input', {
+                  id: 'url',
+                  className: 'cf-form-input',
+                  placeholder: 'Video URL ...',
+                  ref: inputRef
+                }),
+                React.createElement(
+                  'div',
+                  { style: { display: 'flex' } },
+                  React.createElement(
+                    'button',
+                    {
+                      type: 'submit',
+                      className: 'cf-btn-primary'
+                    },
+                    'Search'
+                  ),
+                  data &&
+                    data.url &&
+                    React.createElement(
+                      'button',
+                      {
+                        type: 'button',
+                        className: 'cf-btn-secondary',
+                        onClick: function() {
+                          extension.field.setValue(null);
+                          self.setState({ data: null });
+                        }
+                      },
+                      'Remove'
+                    )
+                )
+              ),
+              data &&
+                data.url &&
+                React.createElement(
+                  'a',
+                  {
+                    style: { maxWidth: '400px', display: 'block' },
+                    rel: 'noreferrer noopener',
+                    target: '_blank',
+                    href: data.url || undefined
+                  },
+                  React.createElement('div', {
+                    style: {
+                      paddingTop: '56.25%',
+                      backgroundSize: 'cover',
+                      backgroundPosition: '50% 50%',
+                      backgroundRepeat: 'no-repeat',
+                      backgroundImage:
+                        data && data.thumbnail_url ? 'url(' + data.thumbnail_url + ')' : ''
+                    }
+                  }),
+                  React.createElement('h2', null, data.title || '&nbsp;')
+                )
+            );
+          }
+        }
+
+        // Render
+        ReactDOM.render(React.createElement(YoutubeForm), document.getElementById('content'));
+      });
+    </script>
+  </body>
+</html>
