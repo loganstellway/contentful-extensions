@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Contentful UI-Extension Shopify Products</title>
+    <link
+      rel="stylesheet"
+      href="https://contentful.github.io/ui-extensions-sdk/cf-extension.css"
+    />
+    <style>
+      .product.selectedProduct {
+        display: none;
+        cursor: default !important;
+        margin-bottom: 40px;
+      }
+
+      .selectedProduct.active {
+        display: inline-block;
+      }
+
+      .product.selectedProduct:hover {
+        background-color: transparent;
+      }
+
+      .product.selectedProduct .product-image {
+        margin-top: 30px;
+      }
+
+      .product-delete {
+        cursor: pointer;
+        border: 1px solid #000000;
+        border-radius: 50%;
+        width: 18px;
+        height: 18px;
+        float: right;
+        text-align: center;
+      }
+
+      .product-delete:hover {
+        background-color: #000000;
+        color: #ffffff;
+      }
+
+      .product-grid {
+        display: flex;
+        flex-wrap: wrap;
+        margin-top: 40px;
+      }
+
+      .product {
+        border: 1px solid #f3f3f3;
+        padding: 10px;
+        cursor: pointer;
+        width: 200px;
+        margin-left: 20px;
+        margin-bottom: 20px;
+      }
+
+      .product:hover {
+        background-color: #f3f3f3;
+      }
+
+      .product-image {
+        width: 100%;
+        height: 0;
+        padding-bottom: 100%;
+        background-position: center;
+        background-size: cover;
+      }
+
+      .product-title {
+        margin-top: 10px;
+        text-align: center;
+        font-weight: bold;
+      }
+    </style>
+    <script src="https://unpkg.com/contentful-ui-extensions-sdk@3"></script>
+  </head>
+  <body id="shopify-widget">
+    <div id="content">
+      <div class="selectedProduct product" product-wrapper>
+        <div class="product-delete" product-delete>X</div>
+        <div class="selectedProductImage product-image" product-image></div>
+        <div class="selectedProductTitle product-title" product-title></div>
+      </div>
+      <input
+        id="productQuery"
+        class="cf-form-input"
+        type="string"
+        placeholder="Shirt men"
+      />
+      <div class="cf-form-label">
+        <label for="productQuery">Search products</label>
+      </div>
+      <div class="product-grid"></div>
+    </div>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/2.1.3/jquery.min.js"></script>
+    <script>
+      // jquery throttle -> https://raw.githubusercontent.com/cowboy/jquery-throttle-debounce/v1.1/jquery.ba-throttle-debounce.min.js
+      (function(b, c) {
+        var $ = b.jQuery || b.Cowboy || (b.Cowboy = {}),
+          a;
+        $.throttle = a = function(e, f, j, i) {
+          var h,
+            d = 0;
+          if (typeof f !== "boolean") {
+            i = j;
+            j = f;
+            f = c;
+          }
+          function g() {
+            var o = this,
+              m = +new Date() - d,
+              n = arguments;
+            function l() {
+              d = +new Date();
+              j.apply(o, n);
+            }
+            function k() {
+              h = c;
+            }
+            if (i && !h) {
+              l();
+            }
+            h && clearTimeout(h);
+            if (i === c && m > e) {
+              l();
+            } else {
+              if (f !== true) {
+                h = setTimeout(i ? k : l, i === c ? e - m : e);
+              }
+            }
+          }
+          if ($.guid) {
+            g.guid = j.guid = j.guid || $.guid++;
+          }
+          return g;
+        };
+        $.debounce = function(d, e, f) {
+          return f === c ? a(d, e, false) : a(d, f, e !== false);
+        };
+      })(this);
+    </script>
+    <script>
+      window.contentfulExtension.init(extension => {
+        // Size iframe
+        extension.window.startAutoResizer();
+
+        const $selectedProduct = $("[product-wrapper]");
+        const $selectedProductTitle = $("[product-title]");
+        const $selectedProductHandle = $("[product-handle]");
+        const $selectedProductImage = $("[product-image]");
+        const $selectedDelete = $("[product-delete]");
+        const $products = $(".product-grid");
+        const $select = $("#productQuery");
+        const $button = $("[test-button]");
+        const productQueryFields = `{
+          id
+          title
+          handle
+          vendor
+          variants(first: 1) {
+            edges {
+              node {
+                id
+                title
+                price
+                availableForSale
+              }
+            }
+          }
+          images(first: 1) {
+            edges {
+              node {
+                id
+                altText
+                src
+              }
+            }
+          }
+        }`;
+
+        // Search
+        const productLookup = query =>
+          $.ajax({
+            url: extension.parameters.instance.apiEndpoint,
+            method: "POST",
+            cache: true,
+            headers: {
+              "X-Shopify-Storefront-Access-Token":
+                extension.parameters.instance.apiToken,
+              "Content-Type": "application/graphql"
+            },
+            data: `{
+            shop {
+              name
+              products(first: 20, query: "${query}") {
+                edges {
+                  node ${productQueryFields}
+                }
+              }
+            }
+          }`
+          });
+
+        // Get product by handle
+        const getProductByHandle = handle =>
+          $.ajax({
+            url: extension.parameters.instance.apiEndpoint,
+            method: "POST",
+            cache: true,
+            headers: {
+              "X-Shopify-Storefront-Access-Token":
+                extension.parameters.instance.apiToken,
+              "Content-Type": "application/graphql"
+            },
+            data: `{
+              productByHandle(handle: "${handle}") ${productQueryFields}
+            }`
+          });
+
+        // Initialize
+        const value = extension.field.getValue();
+        if (value) {
+          getProductByHandle(value).then(response => {
+            let product;
+            try {
+              product = response.data.productByHandle;
+              displayResult(product);
+            } catch (error) {
+              console.error(error);
+            }
+          });
+        }
+
+        // Remove
+        $selectedDelete.on("click", function() {
+          extension.field.setValue(null);
+          $selectedProduct.removeClass("active");
+        });
+
+        // Bind input to lookup products
+        $select.on(
+          "keydown",
+          $.throttle(250, event => {
+            productLookup(event.target.value).then(response => {
+              let products;
+              try {
+                products = response.data.shop.products.edges;
+              } catch (error) {
+                products = [];
+                console.error(error);
+              }
+
+              renderProducts(products || []);
+            });
+          })
+        );
+
+        // Render results
+        function renderProducts(products) {
+          $products.html("");
+
+          $.each(products, function(i, item) {
+            let image;
+            try {
+              image = item.node.images.edges[0].node.src;
+            } catch (error) {
+              image = "";
+              console.error(error);
+            }
+
+            const $item = $(
+              `<div class="product" data-product-select>` +
+                `<div class="product-image" style="background-image:url(${image})"></div>` +
+                `<div class="product-title">${item.node.title}</div>` +
+                "</div>"
+            );
+            $item.data("item", item.node);
+            $products.append($item);
+          });
+
+          // Product click
+          $("[data-product-select]").on("click", function() {
+            const item = $(this).data("item");
+
+            extension.field.setValue(item.handle || null);
+            displayResult(item);
+            $products.empty();
+          });
+        }
+
+        // Display
+        const displayResult = product => {
+          if (product && product.handle) {
+            const { title, handle, images } = product;
+
+            $selectedProduct.addClass("active");
+            $selectedProductTitle.text(title);
+            $selectedProductHandle.text(handle);
+
+            let image;
+            try {
+              image = images.edges[0].node.src;
+            } catch (error) {
+              console.error(error);
+            }
+
+            $selectedProductImage.css("background-image", `url(${image})`);
+          } else {
+            $selectedProduct.removeClass("active");
+          }
+        };
+      });
+    </script>
+  </body>
+</html>
